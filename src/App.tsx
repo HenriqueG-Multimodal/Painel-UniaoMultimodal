@@ -7,9 +7,6 @@ import {
   Ship, 
   Calendar, 
   Target, 
-  Database, 
-  Upload, 
-  FileSpreadsheet, 
   Plus, 
   Trash2, 
   Edit2, 
@@ -32,7 +29,6 @@ import {
 import { 
   generateDefaultData, 
   parseGoogleSheetCSV, 
-  parseExcelSpreadsheet,
   ContainerRecord, 
   CLIENTS, 
   ARMADORES 
@@ -121,12 +117,7 @@ export default function App() {
   ]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
-  const [showUploadPanel, setShowUploadPanel] = useState(false);
 
-  // File drag & drop references
-  const [dashboardDragActive, setDashboardDragActive] = useState(false);
-  const fileInputDashboardRef = useRef<HTMLInputElement>(null);
-  const [connectionLog, setConnectionLog] = useState<{ text: string; type: 'info' | 'error' | 'success' }[]>([]);
 
   // Discrete Monthly Target editing handler
   const handleEditMeta = () => {
@@ -139,14 +130,8 @@ export default function App() {
     }
   };
 
-  // Quick reset to default dataset helper
-  const handleResetData = () => {
-    if (window.confirm('Deseja realmente redefinir os dados para o padrão original?')) {
-      setRecords(generateDefaultData());
-      setMetaMensal(500);
-      setConnectionLog([]);
-    }
-  };
+
+
 
 
 
@@ -171,54 +156,6 @@ export default function App() {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFile(e.dataTransfer.files[0]);
     }
-  };
-
-  const handleDashboardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFile(e.target.files[0]);
-    }
-  };
-
-  const handleFile = (file: File) => {
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
-    if (!isExcel) {
-      alert('Por favor, carregue somente planilhas em formato Excel (.xlsx ou .xls). Arquivos CSV de origem única não são suportados para consolidação direta.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const buffer = event.target?.result as ArrayBuffer;
-        const { records: parsedExcel, sheetsFound } = parseExcelSpreadsheet(buffer);
-        
-        if (parsedExcel.length === 0) {
-          alert(`Nenhum dado pôde ser extraído deste arquivo Excel. Verifique se ele contém as abas JUN26, MAI26 ou ABR26.`);
-          return;
-        }
-
-        // Since this is the consolidated base, it overwrites the existing records COMPLETELY!
-        setRecords(parsedExcel);
-
-        // Auto-select active month
-        if (sheetsFound.some(s => s.toUpperCase().includes('JUN'))) {
-          setSelectedMonth('JUN26');
-        } else if (sheetsFound.some(s => s.toUpperCase().includes('MAI'))) {
-          setSelectedMonth('MAI26');
-        } else if (sheetsFound.some(s => s.toUpperCase().includes('ABR'))) {
-          setSelectedMonth('ABR26');
-        }
-
-        const logMessage = `Sucesso! Planilha consolidada carregada. Abas localizadas: [${sheetsFound.join(', ')}]. Total: ${parsedExcel.length} contêineres gravados de forma permanente.`;
-        setConnectionLog(prev => [{ text: logMessage, type: 'success' }, ...prev]);
-        alert(`Planilha Consolidada lida com sucesso!\n\nImportados ${parsedExcel.length} contêineres correspondentes às abas: ${sheetsFound.join(', ')}.`);
-      } catch (err: any) {
-        console.error(err);
-        alert(`Erro ao processar o arquivo Excel: ${err.message || err}`);
-      }
-    };
-
-    reader.readAsArrayBuffer(file);
   };
 
   // Filter bases selection helpers
@@ -466,19 +403,6 @@ export default function App() {
   return (
     <div id="app-root" className="min-h-screen bg-[#f8fafc] text-zinc-800 font-sans overflow-x-hidden">
       
-      {/* Hidden file input for global xlsx updates - always mounted so ref is never null */}
-      <input
-        ref={fileInputDashboardRef}
-        type="file"
-        accept=".xlsx,.xls"
-        className="hidden"
-        onChange={handleDashboardFileChange}
-        onClick={(e) => {
-          // Reset file value to allow uploading the same file multiple times
-          (e.target as HTMLInputElement).value = '';
-        }}
-      />
-      
       {/* HEADER SECTION */}
       <header id="header-section" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 pb-4 border-b border-zinc-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -529,15 +453,6 @@ export default function App() {
             </span>
           </div>
 
-          {/* DISCRETE HEADER ACTION TO UPLOAD PLANILHA */}
-          <button
-            onClick={() => fileInputDashboardRef.current?.click()}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs hover:shadow-md transition cursor-pointer"
-            title="Importar Planilha Consolidada Rápida (.xlsx)"
-          >
-            <Upload className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Atualizar (.xlsx)</span>
-          </button>
         </div>
       </header>
 
@@ -749,100 +664,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-xs transition-all duration-300">
-            <button
-              onClick={() => setShowUploadPanel(prev => !prev)}
-              className="w-full flex justify-between items-center text-xs font-bold text-zinc-700 hover:text-zinc-950 transition cursor-pointer outline-none focus:outline-none"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <Database className="w-4 h-4 text-emerald-500" />
-                <span className="uppercase tracking-wider font-extrabold">Ligar Planilha Consolidada Real (.xlsx)</span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] font-medium text-zinc-400 font-mono">
-                <span>{showUploadPanel ? 'Ocultar Opções' : 'Clique para Configurar'}</span>
-                <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform duration-300 ${showUploadPanel ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
 
-            {showUploadPanel && (
-              <div className="mt-4 pt-4 border-t border-zinc-100 grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-                
-                {/* Visual Drag and Drop Box - Compact Style */}
-                <div className="lg:col-span-7 flex flex-col gap-2">
-                  <div
-                    onDragEnter={handleDashboardDrag}
-                    onDragOver={handleDashboardDrag}
-                    onDragLeave={handleDashboardDrag}
-                    onDrop={handleDashboardDrop}
-                    onClick={() => fileInputDashboardRef.current?.click()}
-                    className={`flex-1 border-2 border-dashed rounded-lg p-4 text-center cursor-pointer flex flex-col items-center justify-center transition-all min-h-[95px] ${
-                      dashboardDragActive 
-                        ? 'border-emerald-500 bg-emerald-50' 
-                        : 'border-zinc-200 hover:border-zinc-300 bg-zinc-50 hover:bg-zinc-100/40'
-                    }`}
-                  >
-                    <Upload className={`w-5 h-5 mx-auto mb-1.5 transition-colors ${dashboardDragActive ? 'text-emerald-500' : 'text-zinc-400'}`} />
-                    <span className="text-xs font-bold text-zinc-800 block">
-                      Arraste a planilha de dados consolidada (.xlsx) ou clique para carregar
-                    </span>
-                    <span className="text-[10px] text-zinc-400 block mt-0.5">
-                      Processa automaticamente as abas <b>ABR26</b>, <b>MAI26</b> e <b>JUN26</b>. Não aceita arquivos de tipo CSV.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Brief Helper and Info */}
-                <div className="lg:col-span-5 flex flex-col justify-between bg-zinc-50 border border-zinc-150 rounded-lg p-3.5 text-xs text-zinc-600">
-                  <div className="space-y-1.5">
-                    <div className="flex gap-1.5 items-start">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                      <p className="leading-relaxed text-[11px] text-zinc-500">
-                        <b>Mapeamento das Colunas:</b> <i>Armador</i> (Coluna Q / Index 16), <i>Cliente</i> (Coluna AM / Index 38), <i>Fonte</i> (Coluna AN / Index 39), e <i>Status</i> (Coluna AO / Index 40).
-                      </p>
-                    </div>
-                    <div className="flex gap-1.5 items-start">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                      <p className="leading-relaxed text-[11px] text-zinc-500">
-                        <b>Seguro e Rápido:</b> Os dados são importados instantaneamente no seu navegador de forma privada.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-zinc-200/60 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                    <span className="flex items-center gap-1 font-semibold text-zinc-400">
-                      <Info className="w-3 h-3 text-zinc-400" />
-                      Extrai até Coluna AO
-                    </span>
-                    <button 
-                      onClick={handleResetData}
-                      className="text-[10px] text-zinc-500 hover:text-red-500 hover:underline transition font-bold cursor-pointer"
-                    >
-                      Redefinir Dados Base
-                    </button>
-                  </div>
-                </div>
-
-                {/* Connection logs snippet */}
-                {connectionLog.length > 0 && (
-                  <div className="lg:col-span-12 flex flex-col gap-1 mt-1">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Último Evento de Carregamento:</span>
-                    <div className={`p-2 rounded-md text-[10px] font-mono border ${
-                      connectionLog[0].type === 'error' 
-                        ? 'bg-red-50 text-red-600 border-red-100' 
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                    }`}>
-                      {connectionLog[0].text}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            )}
-          </div>
 
           {/* MAIN COLUMN CONTENT */}
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
@@ -1111,21 +933,7 @@ export default function App() {
 
           </div>
 
-          {/* Quick utility area */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-100/70 rounded-lg p-3.5 border border-zinc-200/80 gap-3">
-            <span className="text-xs text-zinc-600 flex items-center gap-1.5 leading-relaxed">
-              <Info className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-              Esta visualização consolida todos os dados locais. Você também pode carregar arquivos de planilha real para atualizar os dados de forma permanente.
-            </span>
-            <div className="flex gap-2 w-full sm:w-auto self-end">
-              <button 
-                onClick={handleResetData}
-                className="w-full sm:w-auto px-3.5 py-1.5 rounded-md text-xs font-bold bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 hover:border-zinc-300 transition shadow-xs"
-              >
-                Resetar Dados de Teste
-              </button>
-            </div>
-          </div>
+
 
         </section>
 
