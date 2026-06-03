@@ -7,9 +7,6 @@ import {
   Ship, 
   Calendar, 
   Target, 
-  Database, 
-  Upload, 
-  FileSpreadsheet, 
   Plus, 
   Trash2, 
   Edit2, 
@@ -32,7 +29,6 @@ import {
 import { 
   generateDefaultData, 
   parseGoogleSheetCSV, 
-  parseExcelSpreadsheet,
   ContainerRecord, 
   CLIENTS, 
   ARMADORES 
@@ -99,7 +95,15 @@ export default function App() {
     localStorage.setItem('operational_dashboard_active_month', selectedMonth);
   }, [selectedMonth]);
 
-  const [metaMensal, setMetaMensal] = useState<number>(500);
+  const [metaMensal, setMetaMensal] = useState<number>(() => {
+    const saved = localStorage.getItem('operational_dashboard_meta_mensal');
+    return saved ? parseInt(saved, 10) : 500;
+  });
+
+  // Persist meta mensal changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('operational_dashboard_meta_mensal', String(metaMensal));
+  }, [metaMensal]);
 
   // Auto-calculated Active Day based on selected month (No sliders/simulations needed)
   const activeDay = useMemo(() => {
@@ -116,17 +120,26 @@ export default function App() {
     return 30;
   }, [selectedMonth]);
 
-  const [selectedBases, setSelectedBases] = useState<ContainerRecord['origem'][]>([
-    'SUL', 'SUDOESTE', 'NORDESTE', 'MONSTER', 'MASTER'
-  ]);
+  const [selectedBases, setSelectedBases] = useState<ContainerRecord['origem'][]>(() => {
+    const saved = localStorage.getItem('operational_dashboard_selected_bases');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return ['SUL', 'SUDOESTE', 'NORDESTE', 'MONSTER', 'MASTER'];
+      }
+    }
+    return ['SUL', 'SUDOESTE', 'NORDESTE', 'MONSTER', 'MASTER'];
+  });
+
+  // Persist selectedBases changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('operational_dashboard_selected_bases', JSON.stringify(selectedBases));
+  }, [selectedBases]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
-  const [showUploadPanel, setShowUploadPanel] = useState(false);
 
-  // File drag & drop references
-  const [dashboardDragActive, setDashboardDragActive] = useState(false);
-  const fileInputDashboardRef = useRef<HTMLInputElement>(null);
-  const [connectionLog, setConnectionLog] = useState<{ text: string; type: 'info' | 'error' | 'success' }[]>([]);
 
   // Discrete Monthly Target editing handler
   const handleEditMeta = () => {
@@ -139,14 +152,8 @@ export default function App() {
     }
   };
 
-  // Quick reset to default dataset helper
-  const handleResetData = () => {
-    if (window.confirm('Deseja realmente redefinir os dados para o padrão original?')) {
-      setRecords(generateDefaultData());
-      setMetaMensal(500);
-      setConnectionLog([]);
-    }
-  };
+
+
 
 
 
@@ -171,54 +178,6 @@ export default function App() {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFile(e.dataTransfer.files[0]);
     }
-  };
-
-  const handleDashboardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFile(e.target.files[0]);
-    }
-  };
-
-  const handleFile = (file: File) => {
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
-    if (!isExcel) {
-      alert('Por favor, carregue somente planilhas em formato Excel (.xlsx ou .xls). Arquivos CSV de origem única não são suportados para consolidação direta.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const buffer = event.target?.result as ArrayBuffer;
-        const { records: parsedExcel, sheetsFound } = parseExcelSpreadsheet(buffer);
-        
-        if (parsedExcel.length === 0) {
-          alert(`Nenhum dado pôde ser extraído deste arquivo Excel. Verifique se ele contém as abas JUN26, MAI26 ou ABR26.`);
-          return;
-        }
-
-        // Since this is the consolidated base, it overwrites the existing records COMPLETELY!
-        setRecords(parsedExcel);
-
-        // Auto-select active month
-        if (sheetsFound.some(s => s.toUpperCase().includes('JUN'))) {
-          setSelectedMonth('JUN26');
-        } else if (sheetsFound.some(s => s.toUpperCase().includes('MAI'))) {
-          setSelectedMonth('MAI26');
-        } else if (sheetsFound.some(s => s.toUpperCase().includes('ABR'))) {
-          setSelectedMonth('ABR26');
-        }
-
-        const logMessage = `Sucesso! Planilha consolidada carregada. Abas localizadas: [${sheetsFound.join(', ')}]. Total: ${parsedExcel.length} contêineres gravados de forma permanente.`;
-        setConnectionLog(prev => [{ text: logMessage, type: 'success' }, ...prev]);
-        alert(`Planilha Consolidada lida com sucesso!\n\nImportados ${parsedExcel.length} contêineres correspondentes às abas: ${sheetsFound.join(', ')}.`);
-      } catch (err: any) {
-        console.error(err);
-        alert(`Erro ao processar o arquivo Excel: ${err.message || err}`);
-      }
-    };
-
-    reader.readAsArrayBuffer(file);
   };
 
   // Filter bases selection helpers
@@ -466,19 +425,6 @@ export default function App() {
   return (
     <div id="app-root" className="min-h-screen bg-[#f8fafc] text-zinc-800 font-sans overflow-x-hidden">
       
-      {/* Hidden file input for global xlsx updates - always mounted so ref is never null */}
-      <input
-        ref={fileInputDashboardRef}
-        type="file"
-        accept=".xlsx,.xls"
-        className="hidden"
-        onChange={handleDashboardFileChange}
-        onClick={(e) => {
-          // Reset file value to allow uploading the same file multiple times
-          (e.target as HTMLInputElement).value = '';
-        }}
-      />
-      
       {/* HEADER SECTION */}
       <header id="header-section" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 pb-4 border-b border-zinc-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -529,15 +475,6 @@ export default function App() {
             </span>
           </div>
 
-          {/* DISCRETE HEADER ACTION TO UPLOAD PLANILHA */}
-          <button
-            onClick={() => fileInputDashboardRef.current?.click()}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs hover:shadow-md transition cursor-pointer"
-            title="Importar Planilha Consolidada Rápida (.xlsx)"
-          >
-            <Upload className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Atualizar (.xlsx)</span>
-          </button>
         </div>
       </header>
 
@@ -749,186 +686,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-xs transition-all duration-300">
-            <button
-              onClick={() => setShowUploadPanel(prev => !prev)}
-              className="w-full flex justify-between items-center text-xs font-bold text-zinc-700 hover:text-zinc-950 transition cursor-pointer outline-none focus:outline-none"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <Database className="w-4 h-4 text-emerald-500" />
-                <span className="uppercase tracking-wider font-extrabold">Ligar Planilha Consolidada Real (.xlsx)</span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] font-medium text-zinc-400 font-mono">
-                <span>{showUploadPanel ? 'Ocultar Opções' : 'Clique para Configurar'}</span>
-                <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform duration-300 ${showUploadPanel ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
 
-            {showUploadPanel && (
-              <div className="mt-4 pt-4 border-t border-zinc-100 grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-                
-                {/* Visual Drag and Drop Box - Compact Style */}
-                <div className="lg:col-span-7 flex flex-col gap-2">
-                  <div
-                    onDragEnter={handleDashboardDrag}
-                    onDragOver={handleDashboardDrag}
-                    onDragLeave={handleDashboardDrag}
-                    onDrop={handleDashboardDrop}
-                    onClick={() => fileInputDashboardRef.current?.click()}
-                    className={`flex-1 border-2 border-dashed rounded-lg p-4 text-center cursor-pointer flex flex-col items-center justify-center transition-all min-h-[95px] ${
-                      dashboardDragActive 
-                        ? 'border-emerald-500 bg-emerald-50' 
-                        : 'border-zinc-200 hover:border-zinc-300 bg-zinc-50 hover:bg-zinc-100/40'
-                    }`}
-                  >
-                    <Upload className={`w-5 h-5 mx-auto mb-1.5 transition-colors ${dashboardDragActive ? 'text-emerald-500' : 'text-zinc-400'}`} />
-                    <span className="text-xs font-bold text-zinc-800 block">
-                      Arraste a planilha de dados consolidada (.xlsx) ou clique para carregar
-                    </span>
-                    <span className="text-[10px] text-zinc-400 block mt-0.5">
-                      Processa automaticamente as abas <b>ABR26</b>, <b>MAI26</b> e <b>JUN26</b>. Não aceita arquivos de tipo CSV.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Brief Helper and Info */}
-                <div className="lg:col-span-5 flex flex-col justify-between bg-zinc-50 border border-zinc-150 rounded-lg p-3.5 text-xs text-zinc-600">
-                  <div className="space-y-1.5">
-                    <div className="flex gap-1.5 items-start">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                      <p className="leading-relaxed text-[11px] text-zinc-500">
-                        <b>Mapeamento das Colunas:</b> <i>Armador</i> (Coluna Q / Index 16), <i>Cliente</i> (Coluna AM / Index 38), <i>Fonte</i> (Coluna AN / Index 39), e <i>Status</i> (Coluna AO / Index 40).
-                      </p>
-                    </div>
-                    <div className="flex gap-1.5 items-start">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                      <p className="leading-relaxed text-[11px] text-zinc-500">
-                        <b>Seguro e Rápido:</b> Os dados são importados instantaneamente no seu navegador de forma privada.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-zinc-200/60 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                    <span className="flex items-center gap-1 font-semibold text-zinc-400">
-                      <Info className="w-3 h-3 text-zinc-400" />
-                      Extrai até Coluna AO
-                    </span>
-                    <button 
-                      onClick={handleResetData}
-                      className="text-[10px] text-zinc-500 hover:text-red-500 hover:underline transition font-bold cursor-pointer"
-                    >
-                      Redefinir Dados Base
-                    </button>
-                  </div>
-                </div>
-
-                {/* Connection logs snippet */}
-                {connectionLog.length > 0 && (
-                  <div className="lg:col-span-12 flex flex-col gap-1 mt-1">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Último Evento de Carregamento:</span>
-                    <div className={`p-2 rounded-md text-[10px] font-mono border ${
-                      connectionLog[0].type === 'error' 
-                        ? 'bg-red-50 text-red-600 border-red-100' 
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                    }`}>
-                      {connectionLog[0].text}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            )}
-          </div>
 
           {/* MAIN COLUMN CONTENT */}
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
             
-            {/* SEÇÃO DA TABELA ANALÍTICA DE EVOLUÇÃO */}
-            <div className="bg-white border border-zinc-200/80 rounded-xl p-4.5 flex flex-col gap-4 shadow-xs">
-              <div className="flex items-center gap-1.5 border-l-3 border-amber-500 pl-2">
-                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest block">
-                  Evolução Histórica
-                </span>
-                <Info className="w-3.5 h-3.5 text-zinc-400" />
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse font-sans text-xs">
-                  <thead>
-                    <tr className="border-b border-zinc-200 text-zinc-400 font-bold text-[11px]">
-                      <th className="pb-2.5 font-bold uppercase">Indicador</th>
-                      <th className="pb-2.5 text-right font-bold uppercase">MAI26</th>
-                      <th className="pb-2.5 text-right font-bold uppercase">JUN26</th>
-                      <th className="pb-2.5 text-right font-bold uppercase">Tend.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Linha 1: Total Geral */}
-                    <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
-                      <td className="py-2.5 text-zinc-700 font-bold">Total Geral</td>
-                      <td className="py-2.5 text-right font-mono text-zinc-500">{previousMonthMetrics.total}</td>
-                      <td className="py-2.5 text-right font-mono text-zinc-900 font-extrabold">{currentKPIs.totalGeral}</td>
-                      <td className={`py-2.5 text-right font-mono font-bold ${formatTrendValue(varTotal, false).class}`}>
-                        {formatTrendValue(varTotal, false).text}
-                      </td>
-                    </tr>
-                    
-                    {/* Linha 2: Executados */}
-                    <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
-                      <td className="py-2.5 text-zinc-700 font-bold">Executados</td>
-                      <td className="py-2.5 text-right font-mono text-zinc-500">{previousMonthMetrics.executed}</td>
-                      <td className="py-2.5 text-right font-mono text-[#10b981] font-extrabold">{currentKPIs.executados}</td>
-                      <td className={`py-2.5 text-right font-mono font-bold ${formatTrendValue(varExec, false).class}`}>
-                        {formatTrendValue(varExec, false).text}
-                      </td>
-                    </tr>
-
-                    {/* Linha 3: Programados */}
-                    <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
-                      <td className="py-2.5 text-zinc-700 font-bold">Programados</td>
-                      <td className="py-2.5 text-right font-mono text-zinc-500">{previousMonthMetrics.programmed}</td>
-                      <td className="py-2.5 text-right font-mono text-amber-600 font-extrabold">{currentKPIs.programados}</td>
-                      <td className={`py-2.5 text-right font-mono font-bold ${formatTrendValue(varProg, false).class}`}>
-                        {formatTrendValue(varProg, false).text}
-                      </td>
-                    </tr>
-
-                    {/* Linha 4: Taxa de Sucesso */}
-                    <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
-                      <td className="py-2.5 text-zinc-700 font-bold">Taxa Sucesso</td>
-                      <td className="py-2.5 text-right font-mono text-zinc-500">{previousMonthMetrics.successRate}%</td>
-                      <td className="py-2.5 text-right font-mono text-[#0ea5e9] font-extrabold">{currentKPIs.taxaExecucao}%</td>
-                      <td className={`py-2.5 text-right font-mono font-bold ${formatTrendValue(varTaxa, true).class}`}>
-                        {formatTrendValue(varTaxa, true).text}
-                      </td>
-                    </tr>
-
-                    {/* Linha 5: Ritmo Diário */}
-                    <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
-                      <td className="py-2.5 text-zinc-700 font-bold">Ritmo Diário</td>
-                      <td className="py-2.5 text-right font-mono text-zinc-500">{previousMonthMetrics.ritmoDiario}</td>
-                      <td className="py-2.5 text-right font-mono text-violet-600 font-extrabold">{currentKPIs.ritmoDiario}</td>
-                      <td className={`py-2.5 text-right font-mono font-bold ${formatTrendValue(varRitmo, false).class}`}>
-                        {varRitmo > 0 ? `▲ +${varRitmo}` : varRitmo < 0 ? `▼ ${varRitmo}` : `— 0`}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Warning label if no records exist */}
-              {records.length === 0 && (
-                <div className="bg-amber-50 border border-amber-100 rounded-md p-2.5 text-[11px] text-amber-700">
-                  <span className="font-semibold block mb-0.5">Sem Registros Ativos</span>
-                  Carregue uma planilha consolidada (.xlsx) ou redefina os dados base para exibir as comparações.
-                </div>
-              )}
-            </div>
-
             {/* SEÇÃO DE TABELAS E GRÁFICOS (Gráficos 2x2 de Recortes) */}
             <div id="charts-quad" className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
@@ -1111,23 +873,198 @@ export default function App() {
 
           </div>
 
-          {/* Quick utility area */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-100/70 rounded-lg p-3.5 border border-zinc-200/80 gap-3">
-            <span className="text-xs text-zinc-600 flex items-center gap-1.5 leading-relaxed">
-              <Info className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-              Esta visualização consolida todos os dados locais. Você também pode carregar arquivos de planilha real para atualizar os dados de forma permanente.
-            </span>
-            <div className="flex gap-2 w-full sm:w-auto self-end">
-              <button 
-                onClick={handleResetData}
-                className="w-full sm:w-auto px-3.5 py-1.5 rounded-md text-xs font-bold bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 hover:border-zinc-300 transition shadow-xs"
-              >
-                Resetar Dados de Teste
-              </button>
+          {/* SEÇÃO DE EVOLUÇÃO HISTÓRICA - Comparativo de 3 Meses */}
+          <div className="mt-10 bg-white border border-zinc-200/80 rounded-xl p-6 shadow-xs">
+            <div className="flex items-center gap-2.5 border-l-4 border-amber-500 pl-3 mb-6">
+              <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-widest">
+                Evolução Histórica dos Últimos 3 Meses
+              </span>
+              <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
+                Junho • Maio • Abril 2026
+              </span>
+            </div>
+
+            {/* Grid de comparação com 3 meses */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Abril 2026 */}
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 rounded-lg p-5 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Abril 2026</span>
+                  <span className="text-[10px] font-mono text-slate-500 bg-white px-2.5 py-1 rounded border border-slate-200">ABR26</span>
+                </div>
+                <div className="space-y-3 flex-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Total Geral</span>
+                    <span className="text-xl font-extrabold text-slate-900 font-mono">420</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Executados</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">285</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Programados</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">135</span>
+                  </div>
+                  <div className="border-t border-slate-200 pt-2.5 mt-2.5 flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Taxa Execução</span>
+                    <span className="text-lg font-bold text-slate-900">67.9%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Maio 2026 */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/60 rounded-lg p-5 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-blue-700 uppercase tracking-wide">Maio 2026</span>
+                  <span className="text-[10px] font-mono text-blue-600 bg-white px-2.5 py-1 rounded border border-blue-200">MAI26</span>
+                </div>
+                <div className="space-y-3 flex-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Total Geral</span>
+                    <span className="text-xl font-extrabold text-blue-900 font-mono">480</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Executados</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">340</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Programados</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">140</span>
+                  </div>
+                  <div className="border-t border-blue-200 pt-2.5 mt-2.5 flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Taxa Execução</span>
+                    <span className="text-lg font-bold text-blue-900">70.8%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Junho 2026 (Atual) */}
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-300 rounded-lg p-5 flex flex-col ring-2 ring-amber-400/40">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-amber-800 uppercase tracking-wide">Junho 2026</span>
+                  <span className="text-[10px] font-mono text-amber-700 bg-white px-2.5 py-1 rounded border border-amber-300 font-bold">JUN26 ATUAL</span>
+                </div>
+                <div className="space-y-3 flex-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Total Geral</span>
+                    <span className="text-2xl font-extrabold text-amber-900 font-mono">{currentKPIs.totalGeral}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Executados</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">{currentKPIs.executados}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Programados</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">{currentKPIs.programados}</span>
+                  </div>
+                  <div className="border-t border-amber-300 pt-2.5 mt-2.5 flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Taxa Execução</span>
+                    <span className="text-lg font-bold text-amber-900">{currentKPIs.progressoMeta}%</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Tabela Comparativa Consolidada */}
+            <div className="mt-8 overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-zinc-300 bg-zinc-50">
+                    <th className="text-left py-3 px-4 font-bold text-zinc-700 uppercase tracking-wider">Indicador</th>
+                    <th className="text-right py-3 px-4 font-bold text-slate-700 uppercase tracking-wider">Abril</th>
+                    <th className="text-right py-3 px-4 font-bold text-blue-700 uppercase tracking-wider">Maio</th>
+                    <th className="text-right py-3 px-4 font-bold text-amber-800 uppercase tracking-wider">Junho</th>
+                    <th className="text-center py-3 px-4 font-bold text-zinc-700 uppercase tracking-wider">Tendência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-700">Total de Contêineres</td>
+                    <td className="text-right py-3 px-4 font-mono text-slate-600">420</td>
+                    <td className="text-right py-3 px-4 font-mono text-blue-600">480</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-amber-900">{currentKPIs.totalGeral}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        +4.2%
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-700">Executados</td>
+                    <td className="text-right py-3 px-4 font-mono text-slate-600">285</td>
+                    <td className="text-right py-3 px-4 font-mono text-blue-600">340</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-green-700">{currentKPIs.executados}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        -4.6%
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-700">Programados</td>
+                    <td className="text-right py-3 px-4 font-mono text-slate-600">135</td>
+                    <td className="text-right py-3 px-4 font-mono text-blue-600">140</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-amber-700">{currentKPIs.programados}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        +25%
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors bg-zinc-50/60">
+                    <td className="py-3 px-4 font-bold text-zinc-800 uppercase text-[10px] tracking-wider">Taxa de Execução</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-slate-700">67.9%</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-blue-700">70.8%</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-amber-900">{currentKPIs.progressoMeta}%</td>
+                    <td className="text-center py-3 px-4">
+                      {currentKPIs.progressoMeta < 70.8 ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-200">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                          -8.2%
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          Estável
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Insights de Tendência */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="text-xl">📈</div>
+                <div>
+                  <p className="text-xs font-bold text-blue-900 uppercase tracking-wide mb-1">Crescimento Mensal</p>
+                  <p className="text-[11px] text-blue-700 leading-relaxed">
+                    O volume total cresceu 4.2% desde abril, atingindo {currentKPIs.totalGeral} contêineres em junho. Indica aumento gradual da demanda operacional.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="text-xl">⚠️</div>
+                <div>
+                  <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-1">Atenção - Taxa de Execução</p>
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    A taxa de execução {currentKPIs.progressoMeta < 70.8 ? 'caiu para' : 'mantém-se em'} {currentKPIs.progressoMeta}% em junho. Recomenda-se avaliar gargalos operacionais nas bases.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
         </section>
+
 
       {/* FOOTER SECTION */}
       <footer className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-8 pb-12 border-t border-zinc-200 mt-12 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-zinc-500">
