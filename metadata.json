@@ -1,0 +1,6 @@
+{
+  "name": "Painel Operacional",
+  "description": "Dashboard de contêineres e consolidado de bases regionais com filtros dinâmicos e conexão à planilha Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
