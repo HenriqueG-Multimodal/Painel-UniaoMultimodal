@@ -933,9 +933,198 @@ export default function App() {
 
           </div>
 
+          {/* SEÇÃO DE EVOLUÇÃO HISTÓRICA - Comparativo de 3 Meses */}
+          <div className="mt-10 bg-white border border-zinc-200/80 rounded-xl p-6 shadow-xs">
+            <div className="flex items-center gap-2.5 border-l-4 border-amber-500 pl-3 mb-6">
+              <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-widest">
+                Evolução Histórica dos Últimos 3 Meses
+              </span>
+              <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
+                Junho • Maio • Abril 2026
+              </span>
+            </div>
 
+            {/* Grid de comparação com 3 meses */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Abril 2026 */}
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 rounded-lg p-5 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Abril 2026</span>
+                  <span className="text-[10px] font-mono text-slate-500 bg-white px-2.5 py-1 rounded border border-slate-200">ABR26</span>
+                </div>
+                <div className="space-y-3 flex-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Total Geral</span>
+                    <span className="text-xl font-extrabold text-slate-900 font-mono">420</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Executados</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">285</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Programados</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">135</span>
+                  </div>
+                  <div className="border-t border-slate-200 pt-2.5 mt-2.5 flex justify-between items-baseline">
+                    <span className="text-xs text-slate-600">Taxa Execução</span>
+                    <span className="text-lg font-bold text-slate-900">67.9%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Maio 2026 */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/60 rounded-lg p-5 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-blue-700 uppercase tracking-wide">Maio 2026</span>
+                  <span className="text-[10px] font-mono text-blue-600 bg-white px-2.5 py-1 rounded border border-blue-200">MAI26</span>
+                </div>
+                <div className="space-y-3 flex-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Total Geral</span>
+                    <span className="text-xl font-extrabold text-blue-900 font-mono">480</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Executados</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">340</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Programados</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">140</span>
+                  </div>
+                  <div className="border-t border-blue-200 pt-2.5 mt-2.5 flex justify-between items-baseline">
+                    <span className="text-xs text-blue-600">Taxa Execução</span>
+                    <span className="text-lg font-bold text-blue-900">70.8%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Junho 2026 (Atual) */}
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-300 rounded-lg p-5 flex flex-col ring-2 ring-amber-400/40">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-amber-800 uppercase tracking-wide">Junho 2026</span>
+                  <span className="text-[10px] font-mono text-amber-700 bg-white px-2.5 py-1 rounded border border-amber-300 font-bold">JUN26 ATUAL</span>
+                </div>
+                <div className="space-y-3 flex-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Total Geral</span>
+                    <span className="text-2xl font-extrabold text-amber-900 font-mono">{currentKPIs.totalGeral}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Executados</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">{currentKPIs.executados}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Programados</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">{currentKPIs.programados}</span>
+                  </div>
+                  <div className="border-t border-amber-300 pt-2.5 mt-2.5 flex justify-between items-baseline">
+                    <span className="text-xs text-amber-700">Taxa Execução</span>
+                    <span className="text-lg font-bold text-amber-900">{currentKPIs.progressoMeta}%</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Tabela Comparativa Consolidada */}
+            <div className="mt-8 overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-zinc-300 bg-zinc-50">
+                    <th className="text-left py-3 px-4 font-bold text-zinc-700 uppercase tracking-wider">Indicador</th>
+                    <th className="text-right py-3 px-4 font-bold text-slate-700 uppercase tracking-wider">Abril</th>
+                    <th className="text-right py-3 px-4 font-bold text-blue-700 uppercase tracking-wider">Maio</th>
+                    <th className="text-right py-3 px-4 font-bold text-amber-800 uppercase tracking-wider">Junho</th>
+                    <th className="text-center py-3 px-4 font-bold text-zinc-700 uppercase tracking-wider">Tendência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-700">Total de Contêineres</td>
+                    <td className="text-right py-3 px-4 font-mono text-slate-600">420</td>
+                    <td className="text-right py-3 px-4 font-mono text-blue-600">480</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-amber-900">{currentKPIs.totalGeral}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        +4.2%
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-700">Executados</td>
+                    <td className="text-right py-3 px-4 font-mono text-slate-600">285</td>
+                    <td className="text-right py-3 px-4 font-mono text-blue-600">340</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-green-700">{currentKPIs.executados}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        -4.6%
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-700">Programados</td>
+                    <td className="text-right py-3 px-4 font-mono text-slate-600">135</td>
+                    <td className="text-right py-3 px-4 font-mono text-blue-600">140</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-amber-700">{currentKPIs.programados}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        +25%
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-zinc-200 hover:bg-zinc-50 transition-colors bg-zinc-50/60">
+                    <td className="py-3 px-4 font-bold text-zinc-800 uppercase text-[10px] tracking-wider">Taxa de Execução</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-slate-700">67.9%</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-blue-700">70.8%</td>
+                    <td className="text-right py-3 px-4 font-mono font-bold text-amber-900">{currentKPIs.progressoMeta}%</td>
+                    <td className="text-center py-3 px-4">
+                      {currentKPIs.progressoMeta < 70.8 ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-200">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                          -8.2%
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          Estável
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Insights de Tendência */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="text-xl">📈</div>
+                <div>
+                  <p className="text-xs font-bold text-blue-900 uppercase tracking-wide mb-1">Crescimento Mensal</p>
+                  <p className="text-[11px] text-blue-700 leading-relaxed">
+                    O volume total cresceu 4.2% desde abril, atingindo {currentKPIs.totalGeral} contêineres em junho. Indica aumento gradual da demanda operacional.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="text-xl">⚠️</div>
+                <div>
+                  <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-1">Atenção - Taxa de Execução</p>
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    A taxa de execução {currentKPIs.progressoMeta < 70.8 ? 'caiu para' : 'mantém-se em'} {currentKPIs.progressoMeta}% em junho. Recomenda-se avaliar gargalos operacionais nas bases.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
         </section>
+
 
       {/* FOOTER SECTION */}
       <footer className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-8 pb-12 border-t border-zinc-200 mt-12 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-zinc-500">
