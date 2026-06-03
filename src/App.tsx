@@ -95,7 +95,15 @@ export default function App() {
     localStorage.setItem('operational_dashboard_active_month', selectedMonth);
   }, [selectedMonth]);
 
-  const [metaMensal, setMetaMensal] = useState<number>(500);
+  const [metaMensal, setMetaMensal] = useState<number>(() => {
+    const saved = localStorage.getItem('operational_dashboard_meta_mensal');
+    return saved ? parseInt(saved, 10) : 500;
+  });
+
+  // Persist meta mensal changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('operational_dashboard_meta_mensal', String(metaMensal));
+  }, [metaMensal]);
 
   // Auto-calculated Active Day based on selected month (No sliders/simulations needed)
   const activeDay = useMemo(() => {
@@ -112,9 +120,23 @@ export default function App() {
     return 30;
   }, [selectedMonth]);
 
-  const [selectedBases, setSelectedBases] = useState<ContainerRecord['origem'][]>([
-    'SUL', 'SUDOESTE', 'NORDESTE', 'MONSTER', 'MASTER'
-  ]);
+  const [selectedBases, setSelectedBases] = useState<ContainerRecord['origem'][]>(() => {
+    const saved = localStorage.getItem('operational_dashboard_selected_bases');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return ['SUL', 'SUDOESTE', 'NORDESTE', 'MONSTER', 'MASTER'];
+      }
+    }
+    return ['SUL', 'SUDOESTE', 'NORDESTE', 'MONSTER', 'MASTER'];
+  });
+
+  // Persist selectedBases changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('operational_dashboard_selected_bases', JSON.stringify(selectedBases));
+  }, [selectedBases]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
 
