@@ -304,7 +304,29 @@ export default function App() {
     };
   }, [processedRecords, activeDay, metaMensal]);
 
-  // Volume charts data loaders
+  // Calculate metrics for any specific month (used for historical comparison)
+  const calculateMetricsForMonth = (monthPrefix: string) => {
+    const monthRecords = records.filter(r => r.data.startsWith(monthPrefix) && selectedBases.includes(r.origem));
+    const relevantRecords = monthRecords.filter(r => r.status !== 'STATUS OPER');
+    
+    const total = relevantRecords.length;
+    const executed = relevantRecords.filter(r => r.status === 'EXECUTADO').length;
+    const programmed = relevantRecords.filter(r => r.status === 'PROGRAMADO' || r.status === 'A PROGRAMAR').length;
+    const taxaExecucao = total > 0 ? (executed / total) * 100 : 0;
+    
+    return {
+      total,
+      executed,
+      programmed,
+      taxaExecucao: parseFloat(taxaExecucao.toFixed(1))
+    };
+  };
+
+  // Calculate metrics for historical comparison
+  const metricsApr26 = useMemo(() => calculateMetricsForMonth('2026-04'), [records, selectedBases]);
+  const metricsMay26 = useMemo(() => calculateMetricsForMonth('2026-05'), [records, selectedBases]);
+  const metricsJun26 = useMemo(() => calculateMetricsForMonth('2026-06'), [records, selectedBases]);
+
   const volumePorOrigem = useMemo(() => {
     const bases: Record<string, number> = {
       SUDOESTE: 0,
@@ -896,19 +918,19 @@ export default function App() {
                 <div className="space-y-3 flex-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-slate-600">Total Geral</span>
-                    <span className="text-xl font-extrabold text-slate-900 font-mono">420</span>
+                    <span className="text-xl font-extrabold text-slate-900 font-mono">{metricsApr26.total}</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-slate-600">Executados</span>
-                    <span className="text-lg font-bold text-green-700 font-mono">285</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">{metricsApr26.executed}</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-slate-600">Programados</span>
-                    <span className="text-lg font-bold text-amber-700 font-mono">135</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">{metricsApr26.programmed}</span>
                   </div>
                   <div className="border-t border-slate-200 pt-2.5 mt-2.5 flex justify-between items-baseline">
                     <span className="text-xs text-slate-600">Taxa Execução</span>
-                    <span className="text-lg font-bold text-slate-900">67.9%</span>
+                    <span className="text-lg font-bold text-slate-900">{metricsApr26.taxaExecucao}%</span>
                   </div>
                 </div>
               </div>
@@ -922,19 +944,19 @@ export default function App() {
                 <div className="space-y-3 flex-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-blue-600">Total Geral</span>
-                    <span className="text-xl font-extrabold text-blue-900 font-mono">480</span>
+                    <span className="text-xl font-extrabold text-blue-900 font-mono">{metricsMay26.total}</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-blue-600">Executados</span>
-                    <span className="text-lg font-bold text-green-700 font-mono">340</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">{metricsMay26.executed}</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-blue-600">Programados</span>
-                    <span className="text-lg font-bold text-amber-700 font-mono">140</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">{metricsMay26.programmed}</span>
                   </div>
                   <div className="border-t border-blue-200 pt-2.5 mt-2.5 flex justify-between items-baseline">
                     <span className="text-xs text-blue-600">Taxa Execução</span>
-                    <span className="text-lg font-bold text-blue-900">70.8%</span>
+                    <span className="text-lg font-bold text-blue-900">{metricsMay26.taxaExecucao}%</span>
                   </div>
                 </div>
               </div>
@@ -948,22 +970,23 @@ export default function App() {
                 <div className="space-y-3 flex-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-amber-700">Total Geral</span>
-                    <span className="text-2xl font-extrabold text-amber-900 font-mono">{currentKPIs.totalGeral}</span>
+                    <span className="text-2xl font-extrabold text-amber-900 font-mono">{metricsJun26.total}</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-amber-700">Executados</span>
-                    <span className="text-lg font-bold text-green-700 font-mono">{currentKPIs.executados}</span>
+                    <span className="text-lg font-bold text-green-700 font-mono">{metricsJun26.executed}</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-xs text-amber-700">Programados</span>
-                    <span className="text-lg font-bold text-amber-700 font-mono">{currentKPIs.programados}</span>
+                    <span className="text-lg font-bold text-amber-700 font-mono">{metricsJun26.programmed}</span>
                   </div>
                   <div className="border-t border-amber-300 pt-2.5 mt-2.5 flex justify-between items-baseline">
                     <span className="text-xs text-amber-700">Taxa Execução</span>
-                    <span className="text-lg font-bold text-amber-900">{currentKPIs.progressoMeta}%</span>
+                    <span className="text-lg font-bold text-amber-900">{metricsJun26.taxaExecucao}%</span>
                   </div>
                 </div>
               </div>
+
 
             </div>
 
