@@ -645,7 +645,7 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
         
         const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
         
-        const response = await fetch(csvUrl);
+        const response = await fetch(csvUrl, { redirect: 'follow' });
         if (!response.ok) {
           console.warn(`Aba ${sheetName} não encontrada (gid=${gid})`);
           continue;
