@@ -606,51 +606,61 @@ export function parseExcelSpreadsheet(arrayBuffer: ArrayBuffer): {
 
 /**
  * Carrega dados de um Google Sheets publicado na web
- * @param sheetId - ID da planilha do Google Sheets
- * @returns Promise com os registros processados
+ * Mapeamento exato de colunas:
+ * - B (1): DATA — usado na lógica de status (executado vs programado)
+ * - D (3): CLIENTE_CIF — cliente quando tipo de frete é CIF
+ * - G (6): CONTAINER — validar se frete foi EXECUTADO
+ * - J (9): TIPO_FRETE — CIF/FOB para definir pagador
+ * - Q (16): ARMADOR — usado em gráfico e tabela "Armadores por Volume"
+ * - V (21): CLIENTE_FOB — cliente quando tipo de frete é FOB
+ * - AN (39): ORIGEM/BASE — usado em tabela e gráfico "Volume por Origem"
+ * - AM (38): CLIENTE/PAGADOR — usado em tabela "Top Coletas" e filtro
+ * - AO (40): STATUS — usado em todos os KPIs
  */
 export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: ContainerRecord[], sheetsFound: string[] }> {
   try {
-    // Abas esperadas: JUN26, MAI26, ABR26
     const sheetNames = ['JUN26', 'MAI26', 'ABR26'];
     const allRecords: ContainerRecord[] = [];
     const sheetsFound: string[] = [];
     
+    // Mapeamento exato de colunas (0-indexed)
+    const COLUMN_INDICES = {
+      DATA: 1,              // B
+      CLIENTE_CIF: 3,       // D
+      CONTAINER: 6,         // G
+      TIPO_FRETE: 9,        // J
+      ARMADOR: 16,          // Q
+      CLIENTE_FOB: 21,      // V
+      CLIENTE_PAGADOR: 38,  // AM
+      ORIGEM: 39,           // AN
+      STATUS: 40            // AO
+    };
+
     for (const sheetName of sheetNames) {
       try {
-        // URL de exportação CSV do Google Sheets
-        // gid é o ID da aba (0 para a primeira, precisa descobrir para outras)
-        const gid = sheetName === 'JUN26' ? 0 : sheetName === 'MAI26' ? 1 : 2;
+        // Mapear nome da aba para gid (ID interno do Google Sheets)
+        let gid = 0;
+        if (sheetName === 'MAI26') gid = 1;
+        if (sheetName === 'ABR26') gid = 2;
+        
         const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
         
         const response = await fetch(csvUrl);
-        if (!response.ok) continue;
+        if (!response.ok) {
+          console.warn(`Aba ${sheetName} não encontrada (gid=${gid})`);
+          continue;
+        }
         
         const csvText = await response.text();
         const lines = csvText.split('\n');
         
         if (lines.length < 2) continue;
         
-        // Parsear CSV manualmente
-        const rows = lines.map(line => {
-          // Parse CSV simples (não trata aspas complexas)
-          return line.split(',').map(cell => cell.trim());
-        });
-        
-        // Processa os dados similar ao parseExcelSpreadsheet
-        const headerRowIdx = 0;
-        const headers = rows[headerRowIdx].map(h => h.toUpperCase());
-        
-        const colClientIdx = headers.findIndex(h => h.includes('CLIENT') || h.includes('CLIENTE') || h.includes('PAGADOR'));
-        const colArmadorIdx = headers.findIndex(h => h.includes('ARMADOR') || h.includes('SHIPPING') || h.includes('LINE'));
-        const colStatusIdx = headers.findIndex(h => h.includes('STATUS') || h.includes('SITUA') || h.includes('EXECU'));
-        let colContainerIdx = headers.findIndex(h => h.includes('CONT') || h.includes('EQUIP') || h.includes('COD') || h.includes('CNTR'));
-        if (colContainerIdx === -1 && headers.length > 6) colContainerIdx = 6;
-        
-        const colRegionalIdx = headers.findIndex(h => h.includes('REGIONAL') || h.includes('ORIGEM') || h.includes('BASE') || h.includes('FONTE'));
+        // Parse CSV simples
+        const rows = lines.map(line => line.split(',').map(cell => cell.trim()));
         
         let idCounter = 1;
-        for (let r = headerRowIdx + 1; r < rows.length; r++) {
+        for (let r = 1; r < rows.length; r++) {
           const cells = rows[r];
           if (!cells || cells.length === 0) continue;
           
@@ -658,19 +668,36 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
           if (!hasContent) continue;
           
           const getCellStr = (idx: number): string => {
-            if (idx !== -1 && idx < cells.length && cells[idx]) {
+            if (idx < cells.length && cells[idx]) {
               return String(cells[idx]).trim();
             }
             return '';
           };
           
-          let armador = getCellStr(colArmadorIdx !== -1 ? colArmadorIdx : 16) || 'Armador Geral';
-          let client = getCellStr(colClientIdx !== -1 ? colClientIdx : 38) || 'Cliente Geral';
-          let rawOrigem = getCellStr(colRegionalIdx !== -1 ? colRegionalIdx : 39) || '';
-          let container = getCellStr(colContainerIdx) || `CNT-${idCounter}`;
-          let rawStatus = getCellStr(colStatusIdx !== -1 ? colStatusIdx : 40) || 'PROGRAMADO';
+          // Extrair dados das colunas específicas
+          const data = getCellStr(COLUMN_INDICES.DATA);
+          const container = getCellStr(COLUMN_INDICES.CONTAINER) || `CNT-${idCounter}`;
+          const tipoFrete = getCellStr(COLUMN_INDICES.TIPO_FRETE).toUpperCase();
+          const armador = getCellStr(COLUMN_INDICES.ARMADOR) || 'Armador Geral';
+          const rawOrigem = getCellStr(COLUMN_INDICES.ORIGEM) || '';
+          const rawStatus = getCellStr(COLUMN_INDICES.STATUS) || 'PROGRAMADO';
           
-          // Normalizar origem
+          // Determinar cliente baseado em CIF/FOB
+          let cliente = '';
+          if (tipoFrete.includes('CIF')) {
+            cliente = getCellStr(COLUMN_INDICES.CLIENTE_CIF);
+          } else if (tipoFrete.includes('FOB')) {
+            cliente = getCellStr(COLUMN_INDICES.CLIENTE_FOB);
+          }
+          // Fallback para coluna AM (CLIENTE_PAGADOR)
+          if (!cliente) {
+            cliente = getCellStr(COLUMN_INDICES.CLIENTE_PAGADOR);
+          }
+          if (!cliente) {
+            cliente = 'Cliente Geral';
+          }
+          
+          // Normalizar ORIGEM/BASE
           let finalOrigem: ContainerRecord['origem'] = 'SUDOESTE';
           if (rawOrigem) {
             const reg = rawOrigem.toUpperCase();
@@ -682,12 +709,12 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
               finalOrigem = 'MONSTER';
             } else if (reg.includes('MASTER')) {
               finalOrigem = 'MASTER';
-            } else {
+            } else if (reg.includes('SUDOESTE') || reg.includes('SP') || reg.includes('MG')) {
               finalOrigem = 'SUDOESTE';
             }
           }
           
-          // Normalizar status
+          // Normalizar STATUS
           let finalStatus: ContainerRecord['status'] = 'PROGRAMADO';
           if (rawStatus) {
             const st = rawStatus.toUpperCase();
@@ -695,32 +722,47 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
               finalStatus = 'EXECUTADO';
             } else if (st.includes('PROGRAMAD')) {
               finalStatus = 'PROGRAMADO';
-            } else if (st.includes('STATUS OPER')) {
+            } else if (st.includes('STATUS OPER') || st.includes('STATUS_OPER')) {
               finalStatus = 'STATUS OPER';
-            } else if (st.includes('PROGRAMAR')) {
+            } else if (st.includes('PROGRAMAR') || st.includes('A_PROGRAMAR')) {
               finalStatus = 'A PROGRAMAR';
             }
           }
           
-          const formattedDate = `2026-${sheetName === 'JUN26' ? '06' : sheetName === 'MAI26' ? '05' : '04'}-15`;
+          // Formatar DATA (extrair apenas YYYY-MM-DD)
+          let formattedDate = data;
+          if (data && data.length >= 10) {
+            const parts = data.split(/[\/-]/);
+            if (parts.length === 3) {
+              if (parts[2].length === 4) {
+                // DD/MM/YYYY ou DD-MM-YYYY
+                formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              } else if (parts[0].length === 4) {
+                // YYYY/MM/DD ou YYYY-MM-DD
+                formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+              }
+            }
+          }
           
           allRecords.push({
             id: `${sheetName}-${idCounter++}`,
             origem: finalOrigem,
             data: formattedDate,
-            cliente: client,
+            cliente: cliente,
             armador: armador,
             container: container,
             status: finalStatus
           });
         }
         
-        if (allRecords.length > 0) {
-          sheetsFound.push(sheetName);
-        }
+        sheetsFound.push(sheetName);
       } catch (err) {
         console.error(`Erro ao carregar aba ${sheetName}:`, err);
       }
+    }
+    
+    if (allRecords.length === 0) {
+      throw new Error('Nenhum dado foi encontrado nas abas JUN26, MAI26 ou ABR26 do Google Sheets.');
     }
     
     return { records: allRecords, sheetsFound };
