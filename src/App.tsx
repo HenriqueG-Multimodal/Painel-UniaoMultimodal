@@ -23,12 +23,16 @@ import {
   ChevronRight,
   Eye,
   Settings,
-  ChevronDown
+  ChevronDown,
+  Database,
+  Upload,
+  Loader
 } from 'lucide-react';
 
 import { 
   generateDefaultData, 
-  parseGoogleSheetCSV, 
+  parseGoogleSheetCSV,
+  loadFromGoogleSheets,
   ContainerRecord, 
   CLIENTS, 
   ARMADORES 
@@ -140,8 +144,44 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
 
+  // Google Sheets Integration States
+  const GOOGLE_SHEET_ID = '13JiiRQ9nXW2tKK-KmE0VBkdhihrNQ9kvU6fS9A0TJEI';
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
+    return localStorage.getItem('operational_dashboard_last_sync') || '';
+  });
 
-  // Discrete Monthly Target editing handler
+  // Function to sync from Google Sheets
+  const handleSyncGoogleSheets = async () => {
+    setIsSyncing(true);
+    try {
+      const { records: googleRecords, sheetsFound } = await loadFromGoogleSheets(GOOGLE_SHEET_ID);
+      
+      if (googleRecords.length === 0) {
+        alert('Nenhum dado foi encontrado no Google Sheets. Verifique se a planilha está compartilhada e publicada na web.');
+        setIsSyncing(false);
+        return;
+      }
+
+      setRecords(googleRecords);
+      const now = new Date().toLocaleString('pt-BR');
+      setLastSyncTime(now);
+      localStorage.setItem('operational_dashboard_last_sync', now);
+      
+      // Auto-select June if available
+      if (sheetsFound.includes('JUN26')) {
+        setSelectedMonth('JUN26');
+      }
+      
+      alert(`✓ Sincronização bem-sucedida!\n\nAbas carregadas: ${sheetsFound.join(', ')}\nTotal de contêineres: ${googleRecords.length}\n\nÚltima atualização: ${now}`);
+    } catch (error: any) {
+      console.error('Erro ao sincronizar Google Sheets:', error);
+      alert(`Erro ao sincronizar: ${error.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleEditMeta = () => {
     const novaMeta = window.prompt('Digite a nova Meta Mensal de contêineres:', String(metaMensal));
     if (novaMeta) {
@@ -485,6 +525,26 @@ export default function App() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
+          {/* SYNC BUTTON WITH GOOGLE SHEETS */}
+          <button
+            onClick={handleSyncGoogleSheets}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white shadow-xs hover:shadow-md transition cursor-pointer"
+            title="Sincronizar dados do Google Sheets"
+          >
+            {isSyncing ? (
+              <>
+                <Loader className="w-3.5 h-3.5 animate-spin" />
+                <span>Sincronizando...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Google Sheets</span>
+              </>
+            )}
+          </button>
+
           {/* SYSTEM TIME & STATUS */}
           <div className="text-right flex flex-col items-end">
             <span className="text-[11px] text-zinc-400 font-mono tracking-wider uppercase">Status do Processamento</span>
@@ -493,7 +553,7 @@ export default function App() {
               <span className="text-xs text-zinc-700 font-medium">Bases Consolidadas</span>
             </div>
             <span className="text-[10px] text-zinc-400 mt-0.5 font-mono">
-              Atualizado: 01/06/2026 — 18:00
+              {lastSyncTime ? `Última sincronização: ${lastSyncTime}` : 'Nunca sincronizado'}
             </span>
           </div>
 
@@ -602,6 +662,28 @@ export default function App() {
               <span className="font-extrabold text-[#111827]">
                 {currentKPIs.projecaoFechamento} {currentKPIs.projecaoFechamento === 1 ? 'un' : 'un'} ({currentKPIs.ritmoDiario}/dia)
               </span>
+            </div>
+          </div>
+
+          {/* INFORMATIVE PANEL - Google Sheets Setup Instructions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
+            <div className="flex-shrink-0 pt-0.5">
+              <Info className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-blue-900 mb-2">Como usar o Google Sheets</h3>
+              <p className="text-xs text-blue-800 mb-2">
+                Para sincronizar dados do seu Google Sheets automaticamente, faça o seguinte:
+              </p>
+              <ol className="text-xs text-blue-700 space-y-1 ml-4 list-decimal">
+                <li>Abra seu Google Sheets com as abas <b>JUN26, MAI26 e ABR26</b></li>
+                <li>Clique em <b>Arquivo → Compartilhar → Publicar na web</b></li>
+                <li>Selecione <b>"Link" → "Planilha inteira" (ou a aba específica) → Publicar</b></li>
+                <li>Volte aqui e clique em <b>"Google Sheets"</b> no topo para sincronizar</li>
+              </ol>
+              <p className="text-xs text-blue-600 font-semibold mt-2">
+                ✓ Os dados serão carregados automaticamente de todas as abas na planilha
+              </p>
             </div>
           </div>
 
