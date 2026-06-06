@@ -618,12 +618,9 @@ export function parseExcelSpreadsheet(arrayBuffer: ArrayBuffer): {
  */
 export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: ContainerRecord[], sheetsFound: string[] }> {
   try {
-    const sheetNames = ['JUN26', 'MAI26', 'ABR26'];
     const allRecords: ContainerRecord[] = [];
-    const sheetsFound: string[] = [];
+    const sheetsFound = new Set<string>();
     
-    // Mapeamento real de colunas do Google Sheets (0-indexed)
-    // Nota: coluna A (índice 0) está vazia, então os índices são:
     const COLUMN_INDICES = {
       DATA: 1,              // B - COLETA
       CONTAINER: 6,         // G - CONTAINER
@@ -634,137 +631,154 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
       STATUS: 25            // Z - STATUS OPER
     };
 
-    for (const sheetName of sheetNames) {
-      try {
-        let gid = 0;
-        if (sheetName === 'MAI26') gid = 1;
-        if (sheetName === 'ABR26') gid = 2;
-        
-        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-        
-        console.log(`[v0] Carregando aba ${sheetName} de ${csvUrl}`);
-        
-        const response = await fetch(csvUrl, { redirect: 'follow' });
-        if (!response.ok) {
-          console.warn(`[v0] Aba ${sheetName} não encontrada (gid=${gid})`);
-          continue;
-        }
-        
-        const csvText = await response.text();
-        // Remove caracteres especiais de controle que podem estar quebrando o parse
-        const cleanCsvText = csvText.replace(/[\r\n\t^M]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-        const lines = cleanCsvText.split('\n').filter(line => line.trim().length > 0);
-        
-        console.log(`[v0] Aba ${sheetName}: ${lines.length} linhas de dados`);
-        
-        if (lines.length < 2) {
-          console.warn(`[v0] Aba ${sheetName} não tem dados suficientes`);
-          continue;
-        }
-        
-        // Parse CSV simples
-        const rows = lines.map(line => line.split(',').map(cell => cell.trim()));
-        
-        console.log(`[v0] Primeira linha: ${rows[0].length} colunas`);
-        
-        let idCounter = 1;
-        let rowsProcessed = 0;
-        
-        for (let r = 1; r < rows.length; r++) {
-          const cells = rows[r];
-          if (!cells || cells.length === 0) continue;
-          
-          const hasContent = cells.some(c => c && c.trim() !== '');
-          if (!hasContent) continue;
-          
-          const getCellStr = (idx: number): string => {
-            if (idx < cells.length && cells[idx]) {
-              return String(cells[idx]).trim();
-            }
-            return '';
-          };
-          
-          const data = getCellStr(COLUMN_INDICES.DATA);
-          const container = getCellStr(COLUMN_INDICES.CONTAINER) || `CNT-${idCounter}`;
-          const armador = getCellStr(COLUMN_INDICES.ARMADOR) || 'Armador Geral';
-          const cliente = getCellStr(COLUMN_INDICES.PAGADOR) || 'Cliente Geral';
-          const rawOrigem = getCellStr(COLUMN_INDICES.FONTE) || '';
-          const rawStatus = getCellStr(COLUMN_INDICES.STATUS) || 'PROGRAMADO';
-          
-          // Log apenas das primeiras 3 linhas para debug
-          if (r <= 3) {
-            console.log(`[v0] Linha ${r}: data=${data}, container=${container}, origem=${rawOrigem}, status=${rawStatus}`);
-          }
-          // Normalizar ORIGEM/BASE
-          let finalOrigem: ContainerRecord['origem'] = 'SUDOESTE';
-          if (rawOrigem) {
-            const reg = rawOrigem.toUpperCase();
-            if (reg.includes('SUL') || reg.includes('PR') || reg.includes('SC') || reg.includes('RS')) {
-              finalOrigem = 'SUL';
-            } else if (reg.includes('NORDESTE') || reg.includes('NE') || reg.includes('PE') || reg.includes('BA')) {
-              finalOrigem = 'NORDESTE';
-            } else if (reg.includes('MONSTER') || reg.includes('MONST')) {
-              finalOrigem = 'MONSTER';
-            } else if (reg.includes('MASTER')) {
-              finalOrigem = 'MASTER';
-            } else if (reg.includes('SUDOESTE') || reg.includes('SP') || reg.includes('MG')) {
-              finalOrigem = 'SUDOESTE';
-            }
-          }
-          
-          // Normalizar STATUS
-          let finalStatus: ContainerRecord['status'] = 'PROGRAMADO';
-          if (rawStatus) {
-            const st = rawStatus.toUpperCase();
-            if (st.includes('EXECUT')) {
-              finalStatus = 'EXECUTADO';
-            } else if (st.includes('PROGRAMAD')) {
-              finalStatus = 'PROGRAMADO';
-            } else if (st.includes('STATUS OPER') || st.includes('STATUS_OPER')) {
-              finalStatus = 'STATUS OPER';
-            } else if (st.includes('PROGRAMAR') || st.includes('A_PROGRAMAR')) {
-              finalStatus = 'A PROGRAMAR';
-            }
-          }
-          
-          // Formatar DATA
-          let formattedDate = data;
-          if (data && data.length >= 10) {
-            const parts = data.split(/[\/-]/);
-            if (parts.length === 3) {
-              if (parts[2].length === 4) {
-                formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-              } else if (parts[0].length === 4) {
-                formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-              }
-            }
-          }
-          
-          allRecords.push({
-            id: `${sheetName}-${idCounter++}`,
-            origem: finalOrigem,
-            data: formattedDate,
-            cliente: cliente,
-            armador: armador,
-            container: container,
-            status: finalStatus
-          });
-          
-          rowsProcessed++;
-        }
-        
-        console.log(`[v0] Aba ${sheetName}: ${rowsProcessed} registros processados`);
-        sheetsFound.push(sheetName);
-      } catch (err) {
-        console.error(`[v0] Erro ao carregar aba ${sheetName}:`, err);
-      }
+    // Só existe UMA aba (gid=0)
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+    
+    console.log(`[v0] Carregando Google Sheets de ${csvUrl}`);
+    
+    const response = await fetch(csvUrl, { redirect: 'follow' });
+    if (!response.ok) {
+      throw new Error(`Falha ao acessar Google Sheets (status ${response.status})`);
     }
     
-    console.log(`[v0] Total de registros carregados: ${allRecords.length} de ${sheetsFound.length} abas`);
+    const csvText = await response.text();
+    const lines = csvText.split('\n').filter(line => line.trim().length > 0);
+    
+    console.log(`[v0] Total de linhas: ${lines.length}`);
+    
+    if (lines.length < 2) {
+      throw new Error('Google Sheets não tem dados suficientes');
+    }
+    
+    // Parse CSV
+    const rows = lines.map(line => line.split(',').map(cell => cell.trim()));
+    
+    console.log(`[v0] Colunas por linha: ${rows[0].length}`);
+    
+    let idCounter = 1;
+    let rowsProcessed = 0;
+    
+    for (let r = 1; r < rows.length; r++) {
+      const cells = rows[r];
+      if (!cells || cells.length === 0) continue;
+      
+      const hasContent = cells.some(c => c && c.trim() !== '');
+      if (!hasContent) continue;
+      
+      const getCellStr = (idx: number): string => {
+        if (idx < cells.length && cells[idx]) {
+          return String(cells[idx]).trim();
+        }
+        return '';
+      };
+      
+      const data = getCellStr(COLUMN_INDICES.DATA);
+      const container = getCellStr(COLUMN_INDICES.CONTAINER) || `CNT-${idCounter}`;
+      const armador = getCellStr(COLUMN_INDICES.ARMADOR) || 'Armador Geral';
+      const cliente = getCellStr(COLUMN_INDICES.PAGADOR) || 'Cliente Geral';
+      const rawOrigem = getCellStr(COLUMN_INDICES.FONTE) || '';
+      const rawStatus = getCellStr(COLUMN_INDICES.STATUS) || 'PROGRAMADO';
+      
+      // Log apenas das primeiras 3 linhas para debug
+      if (r <= 3) {
+        console.log(`[v0] Linha ${r}: data="${data}", container="${container}", status="${rawStatus}"`);
+      }
+      
+      // Determinar mês baseado na DATA (COLETA)
+      let sheetMonth = 'JUN26';
+      if (data) {
+        const dataUpper = data.toUpperCase();
+        if (dataUpper.includes('2026-06') || dataUpper.includes('06/2026') || dataUpper.includes('JUNHO')) {
+          sheetMonth = 'JUN26';
+        } else if (dataUpper.includes('2026-05') || dataUpper.includes('05/2026') || dataUpper.includes('MAIO')) {
+          sheetMonth = 'MAI26';
+        } else if (dataUpper.includes('2026-04') || dataUpper.includes('04/2026') || dataUpper.includes('ABRIL')) {
+          sheetMonth = 'ABR26';
+        } else {
+          // Tentar parse da data para extrair o mês
+          const dateParts = data.split(/[\/-]/);
+          if (dateParts.length >= 2) {
+            const monthStr = dateParts[1] || dateParts[0];
+            if (monthStr.includes('06')) sheetMonth = 'JUN26';
+            else if (monthStr.includes('05')) sheetMonth = 'MAI26';
+            else if (monthStr.includes('04')) sheetMonth = 'ABR26';
+          }
+        }
+      }
+      
+      sheetsFound.add(sheetMonth);
+      
+      // Normalizar ORIGEM/BASE
+      let finalOrigem: ContainerRecord['origem'] = 'SUDOESTE';
+      if (rawOrigem) {
+        const reg = rawOrigem.toUpperCase();
+        if (reg.includes('SUL') || reg.includes('PR') || reg.includes('SC') || reg.includes('RS')) {
+          finalOrigem = 'SUL';
+        } else if (reg.includes('NORDESTE') || reg.includes('NE') || reg.includes('PE') || reg.includes('BA')) {
+          finalOrigem = 'NORDESTE';
+        } else if (reg.includes('MONSTER') || reg.includes('MONST')) {
+          finalOrigem = 'MONSTER';
+        } else if (reg.includes('MASTER')) {
+          finalOrigem = 'MASTER';
+        } else if (reg.includes('SUDOESTE') || reg.includes('SP') || reg.includes('MG')) {
+          finalOrigem = 'SUDOESTE';
+        }
+      }
+      
+      // Normalizar STATUS
+      let finalStatus: ContainerRecord['status'] = 'PROGRAMADO';
+      if (rawStatus) {
+        const st = rawStatus.toUpperCase();
+        if (st.includes('EXECUT')) {
+          finalStatus = 'EXECUTADO';
+        } else if (st.includes('PROGRAMAD')) {
+          finalStatus = 'PROGRAMADO';
+        } else if (st.includes('STATUS OPER') || st.includes('STATUS_OPER')) {
+          finalStatus = 'STATUS OPER';
+        } else if (st.includes('PROGRAMAR') || st.includes('A_PROGRAMAR')) {
+          finalStatus = 'A PROGRAMAR';
+        }
+      }
+      
+      // Formatar DATA
+      let formattedDate = data;
+      if (data && data.length >= 10) {
+        const parts = data.split(/[\/-]/);
+        if (parts.length === 3) {
+          if (parts[2].length === 4) {
+            formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          } else if (parts[0].length === 4) {
+            formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+          }
+        }
+      }
+      
+      allRecords.push({
+        id: `${sheetMonth}-${idCounter++}`,
+        origem: finalOrigem,
+        data: formattedDate,
+        cliente: cliente,
+        armador: armador,
+        container: container,
+        status: finalStatus
+      });
+      
+      rowsProcessed++;
+    }
+    
+    console.log(`[v0] Total de ${rowsProcessed} registros processados`);
+    console.log(`[v0] Meses encontrados: ${Array.from(sheetsFound).join(', ')}`);
     
     if (allRecords.length === 0) {
-      throw new Error('Nenhum dado foi encontrado nas abas JUN26, MAI26 ou ABR26 do Google Sheets.');
+      throw new Error('Nenhum registro válido foi encontrado no Google Sheets.');
     }
+    
+    return { records: allRecords, sheetsFound: Array.from(sheetsFound) };
+  } catch (err) {
+    console.error('[v0] Erro ao carregar Google Sheets:', err);
+    throw new Error(`Falha ao carregar Google Sheets: ${err}`);
+  }
+}
     
     return { records: allRecords, sheetsFound };
   } catch (err) {
