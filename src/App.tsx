@@ -155,7 +155,10 @@ export default function App() {
   const handleSyncGoogleSheets = async () => {
     setIsSyncing(true);
     try {
+      console.log('[v0] Iniciando sincronização com Google Sheets...');
       const { records: googleRecords, sheetsFound } = await loadFromGoogleSheets(GOOGLE_SHEET_ID);
+      
+      console.log(`[v0] Sincronização retornou: ${googleRecords.length} registros de ${sheetsFound.length} abas`);
       
       if (googleRecords.length === 0) {
         alert('Nenhum dado foi encontrado no Google Sheets. Verifique se a planilha está compartilhada e publicada na web.');
@@ -163,6 +166,7 @@ export default function App() {
         return;
       }
 
+      console.log(`[v0] Salvando ${googleRecords.length} registros no localStorage`);
       setRecords(googleRecords);
       const now = new Date().toLocaleString('pt-BR');
       setLastSyncTime(now);
@@ -175,7 +179,7 @@ export default function App() {
       
       alert(`✓ Sincronização bem-sucedida!\n\nAbas carregadas: ${sheetsFound.join(', ')}\nTotal de contêineres: ${googleRecords.length}\n\nÚltima atualização: ${now}`);
     } catch (error: any) {
-      console.error('Erro ao sincronizar Google Sheets:', error);
+      console.error('[v0] Erro ao sincronizar Google Sheets:', error);
       alert(`Erro ao sincronizar: ${error.message}`);
     } finally {
       setIsSyncing(false);

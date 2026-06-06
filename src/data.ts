@@ -606,8 +606,9 @@ export function parseExcelSpreadsheet(arrayBuffer: ArrayBuffer): {
 
 /**
  * Carrega dados de um Google Sheets publicado na web
- * Mapeamento real de colunas do Google Sheets:
- * - B (1): COLETA/DATA — data do registro
+ * Mapeamento real de colunas do Google Sheets (com coluna vazia no índice 0):
+ * - A (0): [VAZIO]
+ * - B (1): COLETA — data do registro
  * - G (6): CONTAINER — número do contêiner
  * - J (9): CIF/FOB — tipo de frete
  * - Q (16): ARMADOR — armador responsável
@@ -622,6 +623,7 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
     const sheetsFound: string[] = [];
     
     // Mapeamento real de colunas do Google Sheets (0-indexed)
+    // Nota: coluna A (índice 0) está vazia, então os índices são:
     const COLUMN_INDICES = {
       DATA: 1,              // B - COLETA
       CONTAINER: 6,         // G - CONTAINER
@@ -634,28 +636,38 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
 
     for (const sheetName of sheetNames) {
       try {
-        // Mapear nome da aba para gid (ID interno do Google Sheets)
         let gid = 0;
         if (sheetName === 'MAI26') gid = 1;
         if (sheetName === 'ABR26') gid = 2;
         
         const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
         
+        console.log(`[v0] Carregando aba ${sheetName} de ${csvUrl}`);
+        
         const response = await fetch(csvUrl, { redirect: 'follow' });
         if (!response.ok) {
-          console.warn(`Aba ${sheetName} não encontrada (gid=${gid})`);
+          console.warn(`[v0] Aba ${sheetName} não encontrada (gid=${gid})`);
           continue;
         }
         
         const csvText = await response.text();
         const lines = csvText.split('\n');
         
-        if (lines.length < 2) continue;
+        console.log(`[v0] Aba ${sheetName}: ${lines.length} linhas de dados`);
+        
+        if (lines.length < 2) {
+          console.warn(`[v0] Aba ${sheetName} não tem dados suficientes`);
+          continue;
+        }
         
         // Parse CSV simples
         const rows = lines.map(line => line.split(',').map(cell => cell.trim()));
         
+        console.log(`[v0] Primeira linha: ${rows[0].length} colunas`);
+        
         let idCounter = 1;
+        let rowsProcessed = 0;
+        
         for (let r = 1; r < rows.length; r++) {
           const cells = rows[r];
           if (!cells || cells.length === 0) continue;
@@ -670,7 +682,6 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
             return '';
           };
           
-          // Extrair dados das colunas reais
           const data = getCellStr(COLUMN_INDICES.DATA);
           const container = getCellStr(COLUMN_INDICES.CONTAINER) || `CNT-${idCounter}`;
           const armador = getCellStr(COLUMN_INDICES.ARMADOR) || 'Armador Geral';
@@ -710,16 +721,14 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
             }
           }
           
-          // Formatar DATA (extrair apenas YYYY-MM-DD)
+          // Formatar DATA
           let formattedDate = data;
           if (data && data.length >= 10) {
             const parts = data.split(/[\/-]/);
             if (parts.length === 3) {
               if (parts[2].length === 4) {
-                // DD/MM/YYYY ou DD-MM-YYYY
                 formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
               } else if (parts[0].length === 4) {
-                // YYYY/MM/DD ou YYYY-MM-DD
                 formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
               }
             }
@@ -734,13 +743,18 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
             container: container,
             status: finalStatus
           });
+          
+          rowsProcessed++;
         }
         
+        console.log(`[v0] Aba ${sheetName}: ${rowsProcessed} registros processados`);
         sheetsFound.push(sheetName);
       } catch (err) {
-        console.error(`Erro ao carregar aba ${sheetName}:`, err);
+        console.error(`[v0] Erro ao carregar aba ${sheetName}:`, err);
       }
     }
+    
+    console.log(`[v0] Total de registros carregados: ${allRecords.length} de ${sheetsFound.length} abas`);
     
     if (allRecords.length === 0) {
       throw new Error('Nenhum dado foi encontrado nas abas JUN26, MAI26 ou ABR26 do Google Sheets.');
@@ -748,7 +762,7 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
     
     return { records: allRecords, sheetsFound };
   } catch (err) {
-    console.error('Erro ao carregar Google Sheets:', err);
+    console.error('[v0] Erro ao carregar Google Sheets:', err);
     throw new Error(`Falha ao carregar Google Sheets: ${err}`);
   }
 }
