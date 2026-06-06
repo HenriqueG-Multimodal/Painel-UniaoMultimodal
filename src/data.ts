@@ -651,7 +651,9 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
         }
         
         const csvText = await response.text();
-        const lines = csvText.split('\n');
+        // Remove caracteres especiais de controle que podem estar quebrando o parse
+        const cleanCsvText = csvText.replace(/[\r\n\t^M]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+        const lines = cleanCsvText.split('\n').filter(line => line.trim().length > 0);
         
         console.log(`[v0] Aba ${sheetName}: ${lines.length} linhas de dados`);
         
@@ -689,6 +691,10 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
           const rawOrigem = getCellStr(COLUMN_INDICES.FONTE) || '';
           const rawStatus = getCellStr(COLUMN_INDICES.STATUS) || 'PROGRAMADO';
           
+          // Log apenas das primeiras 3 linhas para debug
+          if (r <= 3) {
+            console.log(`[v0] Linha ${r}: data=${data}, container=${container}, origem=${rawOrigem}, status=${rawStatus}`);
+          }
           // Normalizar ORIGEM/BASE
           let finalOrigem: ContainerRecord['origem'] = 'SUDOESTE';
           if (rawOrigem) {
