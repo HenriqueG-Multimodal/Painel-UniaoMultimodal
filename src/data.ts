@@ -779,11 +779,4 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
     throw new Error(`Falha ao carregar Google Sheets: ${err}`);
   }
 }
-    
-    return { records: allRecords, sheetsFound };
-  } catch (err) {
-    console.error('[v0] Erro ao carregar Google Sheets:', err);
-    throw new Error(`Falha ao carregar Google Sheets: ${err}`);
-  }
-}
 
