@@ -752,27 +752,4 @@ export async function loadFromGoogleSheets(sheetId: string): Promise<{ records: 
     throw new Error(`Falha ao carregar Google Sheets: ${err}`);
   }
 }
-            data: formattedDate,
-            cliente: cliente,
-            armador: armador,
-            container: container,
-            status: finalStatus
-          });
-        }
-        
-        sheetsFound.push(sheetName);
-      } catch (err) {
-        console.error(`Erro ao carregar aba ${sheetName}:`, err);
-      }
-    }
-    
-    if (allRecords.length === 0) {
-      throw new Error('Nenhum dado foi encontrado nas abas JUN26, MAI26 ou ABR26 do Google Sheets.');
-    }
-    
-    return { records: allRecords, sheetsFound };
-  } catch (err) {
-    console.error('Erro ao carregar Google Sheets:', err);
-    throw new Error(`Falha ao carregar Google Sheets: ${err}`);
-  }
-}
+
